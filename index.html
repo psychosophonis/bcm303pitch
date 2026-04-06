@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCM303 — Show Pitch</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f7f7f5; --bg3: #f0ede8;
+    --text: #1a1a1a; --text2: #555; --text3: #888;
+    --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.2);
+    --blue-bg: #e6f1fb; --blue-text: #0c447c; --blue-border: rgba(24,95,165,0.3);
+    --green-bg: #eaf3de; --green-text: #27500a; --green-border: rgba(59,109,17,0.3);
+    --red-text: #a32d2d;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #252522; --bg3: #2e2e2a;
+      --text: #e8e6e0; --text2: #aaa; --text3: #666;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+      --blue-bg: #0c2240; --blue-text: #85b7eb; --blue-border: rgba(55,138,221,0.3);
+      --green-bg: #172404; --green-text: #c0dd97; --green-border: rgba(99,153,34,0.3);
+      --red-text: #f09595;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg3); color: var(--text); min-height: 100vh; }
+  .app { max-width: 860px; margin: 0 auto; padding: 2rem 1rem; }
+  header { margin-bottom: 2rem; }
+  header h1 { font-size: 20px; font-weight: 500; }
+  header p { font-size: 14px; color: var(--text2); margin-top: 4px; }
+  nav { display: flex; gap: 2px; background: var(--bg2); border-radius: var(--radius); padding: 4px; margin-bottom: 1.5rem; border: 0.5px solid var(--border); }
+  nav button { flex: 1; padding: 8px 12px; font-size: 14px; border: none; background: transparent; color: var(--text2); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s; }
+  nav button.active { background: var(--bg); color: var(--text); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; }
+  .pitch-group { font-size: 17px; font-weight: 500; margin-bottom: 2px; }
+  .pitch-meta { font-size: 12px; color: var(--text3); margin-bottom: 1rem; }
+  .section { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 0.5px solid var(--border); }
+  .section:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .section-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2); margin-bottom: 5px; }
+  .section-content { font-size: 14px; line-height: 1.75; color: var(--text); white-space: pre-wrap; }
+  .add-row { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .btn { padding: 7px 14px; font-size: 13px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: transparent; color: var(--text); cursor: pointer; transition: background 0.12s; }
+  .btn:hover { background: var(--bg2); }
+  .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-add { background: var(--blue-bg); color: var(--blue-text); border-color: var(--blue-border); }
+  .btn-added { background: var(--green-bg); color: var(--green-text); border-color: var(--green-border); }
+  .btn-del { color: var(--red-text); border-color: rgba(163,45,45,0.3); }
+  .field-group { margin-bottom: 1.25rem; }
+  .field-label { font-size: 13px; font-weight: 500; margin-bottom: 3px; display: block; }
+  .field-hint { font-size: 12px; color: var(--text2); margin-bottom: 6px; line-height: 1.6; }
+  input[type=text], input[type=password] { width: 100%; height: 38px; font-size: 14px; padding: 0 10px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text); }
+  input:focus { outline: 2px solid var(--blue-border); outline-offset: 1px; }
+  textarea { width: 100%; min-height: 110px; resize: vertical; font-size: 14px; font-family: inherit; padding: 9px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg2); color: var(--text); line-height: 1.65; }
+  textarea:focus { outline: 2px solid var(--blue-border); outline-offset: 1px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .status { font-size: 13px; margin-top: 10px; }
+  .status.ok { color: var(--green-text); }
+  .status.err { color: var(--red-text); }
+  .tutor-bar { display: flex; align-items: center; gap: 8px; background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 1.25rem; }
+  .tutor-bar label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .tutor-bar input { width: 160px; height: 32px; font-size: 13px; }
+  .tutor-active { font-size: 13px; font-weight: 500; color: var(--green-text); }
+  .selection-panel { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 1.25rem; }
+  .selection-panel h3 { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .sel-item { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 8px 32px 8px 10px; margin-bottom: 6px; position: relative; }
+  .sel-src { font-size: 11px; color: var(--text3); margin-bottom: 3px; }
+  .sel-text { font-size: 12px; color: var(--text2); line-height: 1.5; }
+  .sel-rm { position: absolute; top: 6px; right: 8px; background: none; border: none; cursor: pointer; color: var(--text3); font-size: 16px; line-height: 1; }
+  .sel-rm:hover { color: var(--red-text); }
+  .metapitch-view { font-size: 15px; line-height: 1.85; white-space: pre-wrap; }
+  .metapitch-editor { min-height: 320px; }
+  .empty { text-align: center; padding: 3rem; color: var(--text3); font-size: 14px; }
+  .synth-btn { margin-left: auto; }
+  .loading { opacity: 0.6; pointer-events: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .pulsing { animation: pulse 1.2s ease infinite; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>BCM303 — Show Pitch</h1>
+    <p>Week 8 — one submission per group. All pitches visible to the class before Week 9.</p>
+  </header>
+  <nav>
+    <button id="tab-gallery" class="active" onclick="setTab('gallery')">Gallery</button>
+    <button id="tab-submit" onclick="setTab('submit')">Submit pitch</button>
+    <button id="tab-metapitch" onclick="setTab('metapitch')">Metapitch</button>
+  </nav>
+  <div id="view"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://zupszzlhicabmkvmxrxe.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp1cHN6emxoaWNhYm1rdm14cnhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTg3ODYsImV4cCI6MjA5MTAzNDc4Nn0.xe74a-ngDSgopxT05H35YiSO74St8h_vi7fuGdqMvmI'; // ← paste from Supabase dashboard > Settings > API
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const SECTIONS = [
+  { key: 'stocktake', col: 'stocktake', label: 'What the class has made', hint: 'Look across all groups — what have the experiments collectively produced? Modes, relationships, subject matter, what worked and what didn\'t. Not just your segment.' },
+  { key: 'showVision', col: 'show_vision', label: 'A vision for the show', hint: 'Argue for a program. Tone, coherence, what it does in the world, who it\'s for and about. Nothing needs to be locked — this is a position to negotiate from.' },
+  { key: 'segmentAnchor', col: 'segment_anchor', label: 'Our segment in that show', hint: 'Not "here is our segment" but: how does your work anchor the vision you\'re arguing for? What does your group bring to the program you\'ve described?' },
+  { key: 'designPosition', col: 'design_position', label: 'Design position', hint: 'Unified show identity across all BCM303 classes, or each class owns its own aesthetic? Declare a position and give reasons.' }
+];
+
+let state = {
+  tab: 'gallery',
+  pitches: [],
+  metapitch: '',
+  selections: [],
+  isTutor: false,
+  tutorPw: '',
+  status: '',
+  statusType: '',
+  loading: false,
+  synthesizing: false
+};
+
+async function init() {
+  await Promise.all([fetchPitches(), fetchMetapitch()]);
+  render();
+}
+
+async function fetchPitches() {
+  const { data } = await db.from('pitches').select('id,group_name,stocktake,show_vision,segment_anchor,design_position,created_at,updated_at').order('created_at', { ascending: false });
+  state.pitches = data || [];
+}
+
+async function fetchMetapitch() {
+  const { data } = await db.from('metapitch').select('content').eq('id', 1).single();
+  state.metapitch = data?.content || '';
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  state.status = '';
+  render();
+}
+
+function setStatus(msg, type, autoClear) {
+  state.status = msg; state.statusType = type;
+  render();
+  if (autoClear) setTimeout(() => { state.status = ''; render(); }, 3000);
+}
+
+async function checkTutor() {
+  if (!state.tutorPw) return;
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/tutor-action`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ tutorPassword: state.tutorPw, action: 'ping' })
+  });
+  const data = await res.json();
+  if (res.status === 401) { setStatus('Wrong tutor password.', 'err'); return; }
+  state.isTutor = true; state.tutorPw = '';
+  render();
+}
+
+async function submitPitch(form) {
+  if (!form.groupName.trim() || !form.password.trim()) { setStatus('Group name and password required.', 'err'); return; }
+  state.loading = true; render();
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-pitch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ groupName: form.groupName, password: form.password, stocktake: form.stocktake, showVision: form.showVision, segmentAnchor: form.segmentAnchor, designPosition: form.designPosition })
+  });
+  const data = await res.json();
+  state.loading = false;
+  if (!data.success) { setStatus(data.error || 'Submission failed.', 'err'); return; }
+  await fetchPitches();
+  setStatus(data.action === 'updated' ? 'Pitch updated.' : 'Pitch submitted.', 'ok', true);
+  state.tab = 'gallery';
+  render();
+}
+
+function addSelection(pitch, sec) {
+  const content = pitch[sec.key] || pitch[sec.col];
+  if (!content) return;
+  const exists = state.selections.find(s => s.groupName === pitch.group_name && s.sectionKey === sec.key);
+  if (!exists) { state.selections.push({ id: Date.now(), groupName: pitch.group_name, sectionKey: sec.key, label: sec.label, content }); render(); }
+}
+
+function removeSelection(id) { state.selections = state.selections.filter(s => s.id !== id); render(); }
+
+async function synthesize() {
+  if (!state.selections.length) return;
+  state.synthesizing = true; render();
+  const passages = state.selections.map(s => `[${s.groupName} — ${s.label}]\n${s.content}`).join('\n\n---\n\n');
+  const systemPrompt = `You are helping synthesize a show pitch for BCM303, a collaborative media production course at the University of Wollongong. Students produce a live-streamed variety show about Local Youth Art and Culture on Dharawal Country, framed as a simulated SBS Viceland commission. The show runs one hour from the UOW G03 studio, streamed to YouTube with a live studio audience. Groups contribute 10-minute segments across four modes: Platform (facilitating someone else's creative practice — mandatory for all groups), Performance (enactment, satire, creative risk), Participation (audience as active content), and Discourse (structured dialogue with genuine stakes). The SBS Charter is the creative provocation: what would public service media look like now, here, on Dharawal Country?\n\nSynthesize the selected passages into a coherent metapitch — a working show vision for Weeks 9–13. Articulate tone and coherence; name the communities and subject matter; suggest how the modes work together across the hour; address the design identity question; flag 2–3 unresolved questions needing class negotiation. Write in clear direct prose, no bullet lists, no headings, approximately 400–500 words. Address it as a document the class will work from, not a summary of submissions.`;
+
+  try {
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: systemPrompt, messages: [{ role: 'user', content: `Selected passages:\n\n${passages}\n\nSynthesize into a metapitch.` }] })
+    });
+    const apiData = await apiRes.json();
+    const draft = apiData.content?.find(b => b.type === 'text')?.text || '';
+    if (!draft) throw new Error('No response from API');
+
+    const saveRes = await fetch(`${SUPABASE_URL}/functions/v1/tutor-action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+      body: JSON.stringify({ tutorPassword: '_session_validated_', action: 'update-metapitch', content: draft })
+    });
+
+    state.metapitch = draft;
+    state.tab = 'metapitch';
+    setStatus('Metapitch generated.', 'ok', true);
+  } catch(e) {
+    setStatus('Synthesis failed: ' + e.message, 'err');
+  }
+  state.synthesizing = false; render();
+}
+
+async function saveMetapitch(content) {
+  await fetch(`${SUPABASE_URL}/functions/v1/tutor-action`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ tutorPassword: '_session_validated_', action: 'update-metapitch', content })
+  });
+}
+
+function render() {
+  ['gallery','submit','metapitch'].forEach(t => {
+    document.getElementById('tab-' + t).className = state.tab === t ? 'active' : '';
+  });
+  const view = document.getElementById('view');
+  view.innerHTML = '';
+  if (state.tab === 'gallery') renderGallery(view);
+  else if (state.tab === 'submit') renderSubmit(view);
+  else renderMetapitch(view);
+}
+
+function renderGallery(root) {
+  const bar = el('div', { className: 'tutor-bar' });
+  if (!state.isTutor) {
+    bar.appendChild(el('label', { textContent: 'Tutor mode:' }));
+    const inp = el('input', { type: 'password', placeholder: 'Tutor password', value: state.tutorPw });
+    inp.oninput = e => { state.tutorPw = e.target.value; };
+    inp.onkeydown = e => { if (e.key === 'Enter') checkTutor(); };
+    const btn = el('button', { className: 'btn btn-sm', textContent: 'Unlock', onclick: checkTutor });
+    bar.appendChild(inp); bar.appendChild(btn);
+  } else {
+    bar.appendChild(el('span', { className: 'tutor-active', textContent: 'Tutor mode active' }));
+    bar.appendChild(el('button', { className: 'btn btn-sm', style: 'margin-left:8px', textContent: 'Exit', onclick: () => { state.isTutor = false; render(); } }));
+    if (state.selections.length > 0) {
+      const sb = el('button', { className: 'btn btn-sm btn-primary synth-btn', onclick: synthesize });
+      sb.innerHTML = state.synthesizing ? '<span class="pulsing">Synthesizing…</span>' : `Synthesize (${state.selections.length}) →`;
+      bar.appendChild(sb);
+    }
+  }
+  root.appendChild(bar);
+
+  if (state.isTutor && state.selections.length > 0) {
+    const panel = el('div', { className: 'selection-panel' });
+    panel.appendChild(el('h3', { textContent: 'Selected for synthesis' }));
+    state.selections.forEach(s => {
+      const item = el('div', { className: 'sel-item' });
+      item.appendChild(el('div', { className: 'sel-src', textContent: s.groupName + ' — ' + s.label }));
+      item.appendChild(el('div', { className: 'sel-text', textContent: s.content.length > 180 ? s.content.slice(0,180) + '…' : s.content }));
+      const rm = el('button', { className: 'sel-rm', textContent: '×', onclick: () => removeSelection(s.id) });
+      item.appendChild(rm); panel.appendChild(item);
+    });
+    root.appendChild(panel);
+  }
+
+  if (!state.pitches.length) { root.appendChild(el('div', { className: 'empty', textContent: 'No pitches yet. Groups submit using the Submit pitch tab.' })); return; }
+
+  state.pitches.forEach(pitch => {
+    const card = el('div', { className: 'card' });
+    card.appendChild(el('div', { className: 'pitch-group', textContent: pitch.group_name }));
+    const ts = new Date(pitch.updated_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    card.appendChild(el('div', { className: 'pitch-meta', textContent: 'Updated ' + ts }));
+
+    SECTIONS.forEach(sec => {
+      const content = pitch[sec.col];
+      if (!content) return;
+      const section = el('div', { className: 'section' });
+      section.appendChild(el('div', { className: 'section-label', textContent: sec.label }));
+      section.appendChild(el('div', { className: 'section-content', textContent: content }));
+      if (state.isTutor) {
+        const already = state.selections.find(s => s.groupName === pitch.group_name && s.sectionKey === sec.key);
+        const addRow = el('div', { className: 'add-row' });
+        const ab = el('button', { className: 'btn btn-sm ' + (already ? 'btn-added' : 'btn-add'), textContent: already ? 'Added' : '+ Add to synthesis' });
+        if (!already) ab.onclick = () => addSelection(pitch, sec);
+        addRow.appendChild(ab); section.appendChild(addRow);
+      }
+      card.appendChild(section);
+    });
+
+    if (state.isTutor) {
+      const delRow = el('div', { style: 'display:flex; justify-content:flex-end; margin-top:8px;' });
+      const db2 = el('button', { className: 'btn btn-sm btn-del', textContent: 'Remove pitch', onclick: async () => {
+        if (!confirm(`Remove ${pitch.group_name}'s pitch?`)) return;
+        await fetch(`${SUPABASE_URL}/functions/v1/tutor-action`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY }, body: JSON.stringify({ tutorPassword: '_session_validated_', action: 'delete-pitch', groupName: pitch.group_name }) });
+        await fetchPitches(); render();
+      }});
+      delRow.appendChild(db2); card.appendChild(delRow);
+    }
+    root.appendChild(card);
+  });
+}
+
+function renderSubmit(root) {
+  const form = { groupName: '', password: '', stocktake: '', showVision: '', segmentAnchor: '', designPosition: '' };
+  const card = el('div', { className: 'card' });
+  card.appendChild(el('p', { style: 'font-size:14px;color:var(--text2);margin-bottom:1.25rem;line-height:1.7', textContent: 'One submission per group. Use the same group name and password to update your pitch before the deadline.' }));
+
+  const row = el('div', { className: 'row2' });
+  [['groupName','text','Group name','e.g. Group 3'],['password','password','Group password','Choose one and remember it']].forEach(([key, type, label, ph]) => {
+    const fg = el('div', { className: 'field-group' });
+    fg.appendChild(el('label', { className: 'field-label', textContent: label }));
+    const inp = el('input', { type, placeholder: ph });
+    inp.oninput = e => { form[key] = e.target.value; };
+    fg.appendChild(inp); row.appendChild(fg);
+  });
+  card.appendChild(row);
+
+  SECTIONS.forEach(sec => {
+    const fg = el('div', { className: 'field-group' });
+    fg.appendChild(el('label', { className: 'field-label', textContent: sec.label }));
+    fg.appendChild(el('div', { className: 'field-hint', textContent: sec.hint }));
+    const ta = el('textarea', { placeholder: 'Write here…' });
+    ta.oninput = e => { form[sec.key] = e.target.value; };
+    fg.appendChild(ta); card.appendChild(fg);
+  });
+
+  const sub = el('button', { className: 'btn btn-primary' + (state.loading ? ' loading' : ''), textContent: state.loading ? 'Submitting…' : 'Submit pitch', onclick: () => submitPitch(form) });
+  card.appendChild(sub);
+  if (state.status) card.appendChild(el('div', { className: 'status ' + state.statusType, textContent: state.status }));
+  root.appendChild(card);
+}
+
+function renderMetapitch(root) {
+  const card = el('div', { className: 'card' });
+  card.appendChild(el('div', { style: 'font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--text2);margin-bottom:1rem', textContent: 'BCM303 — Show metapitch' }));
+  if (state.isTutor) {
+    const ta = el('textarea', { className: 'metapitch-editor', placeholder: 'Synthesize from gallery selections, or write directly here. Auto-saved.' });
+    ta.value = state.metapitch;
+    let saveTimer;
+    ta.oninput = e => { state.metapitch = e.target.value; clearTimeout(saveTimer); saveTimer = setTimeout(() => saveMetapitch(state.metapitch), 1200); };
+    card.appendChild(ta);
+  } else {
+    if (!state.metapitch) { card.appendChild(el('div', { className: 'empty', textContent: 'The metapitch will appear here after the Week 9 session.' })); }
+    else { card.appendChild(el('div', { className: 'metapitch-view', textContent: state.metapitch })); }
+  }
+  if (state.status) card.appendChild(el('div', { className: 'status ' + state.statusType, style: 'margin-top:8px', textContent: state.status }));
+  root.appendChild(card);
+}
+
+function el(tag, props = {}) {
+  const e = document.createElement(tag);
+  Object.entries(props).forEach(([k, v]) => {
+    if (k === 'onclick') e.addEventListener('click', v);
+    else if (k === 'style') e.style.cssText = v;
+    else e[k] = v;
+  });
+  return e;
+}
+
+init();
+</script>
+</body>
+</html>
